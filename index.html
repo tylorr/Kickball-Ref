@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#101613">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23101613'/%3E%3Ccircle cx='30' cy='38' r='11' fill='%23ffb200'/%3E%3Ccircle cx='60' cy='38' r='11' fill='%23ffb200'/%3E%3Ccircle cx='30' cy='68' r='11' fill='%23ff4d3d'/%3E%3Ccircle cx='60' cy='68' r='11' fill='%232c3a32'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Head Ref Counter</title>
+<style>
+  :root{
+    --board:#101613;        /* scoreboard housing */
+    --panel:#1a231e;        /* panel green-black */
+    --line:#2c3a32;         /* panel seams */
+    --led:#ffb200;          /* amber lamp */
+    --led-dim:#3a3020;      /* unlit lamp */
+    --out:#ff4d3d;          /* red lamp */
+    --out-dim:#3d2320;
+    --chalk:#f2efe6;        /* chalk white */
+    --muted:#8fa096;
+    --go:#57d98a;
+    --top:#5ec8f2;          /* top half — sky blue */
+    --bot:#57d98a;          /* bottom half — field green */
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none;
+    -webkit-user-select:none; -webkit-touch-callout:none;}
+  html,body{margin:0; padding:0; background:var(--board); color:var(--chalk);
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    height:100%; overscroll-behavior:none; touch-action:manipulation;}
+  body{display:flex; flex-direction:column; min-height:100dvh; max-width:520px; margin:0 auto;
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
+
+  /* ---------- top bar ---------- */
+  header{display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px 6px;}
+  .brand{font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); font-weight:700;}
+  .sub{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--go); font-weight:700;}
+  .hleft{display:flex; align-items:baseline; gap:10px;}
+  .newgame{background:transparent; border:1px solid var(--line); color:var(--muted);
+    border-radius:10px; font-size:12px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; padding:0 14px; min-height:44px;}
+  .newgame:active{background:var(--line); color:var(--chalk);}
+  .hright{display:flex; gap:8px;}
+  .fsbtn{min-width:44px; padding:0; font-size:18px;}
+
+  /* ---------- scoreboard strip ---------- */
+  .strip{display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
+    margin:4px 12px 8px; padding:8px 10px; background:var(--panel);
+    border:1px solid var(--line); border-radius:14px;}
+  .team{display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .team .lbl{font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); font-weight:700;}
+  .team .runs{font-variant-numeric:tabular-nums; font-size:34px; font-weight:800; line-height:1; color:var(--led);
+    text-shadow:0 0 12px rgba(255,178,0,.35);}
+  .team button{background:transparent; border:1px solid var(--line); color:var(--chalk);
+    border-radius:10px; font-size:14px; font-weight:700; padding:0 16px; min-height:44px;}
+  .team button:active{background:var(--line);}
+  .runbtns{display:flex; gap:6px; margin-top:6px;}
+  .runbtns .rminus{min-width:44px; padding:0; color:var(--muted); font-size:20px;}
+  .inning{display:flex; flex-direction:column; align-items:center; gap:2px; padding:0 14px;}
+  .inning .half{font-size:16px; line-height:1;}
+  .inning .num{font-size:26px; font-weight:800; line-height:1;}
+  .inning .lbl{font-size:9px; letter-spacing:.18em; text-transform:uppercase; font-weight:700;}
+  .inning .clock{font-variant-numeric:tabular-nums; font-size:13px; font-weight:700; margin-top:2px;}
+  .team .lbl{border-bottom:1px dashed var(--line); padding-bottom:1px; max-width:110px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+  /* half-inning color coding: blue = top (away kicks), green = bottom (home kicks) */
+  body.half-top    .inning .half, body.half-top    .inning .lbl, body.half-top    .inning .clock{color:var(--top);}
+  body.half-bottom .inning .half, body.half-bottom .inning .lbl, body.half-bottom .inning .clock{color:var(--bot);}
+  body.half-top    .strip{border-color:rgba(94,200,242,.45); box-shadow:inset 0 0 0 1px rgba(94,200,242,.15);}
+  body.half-bottom .strip{border-color:rgba(87,217,138,.45); box-shadow:inset 0 0 0 1px rgba(87,217,138,.15);}
+  .team .kick{font-size:8px; letter-spacing:.18em; text-transform:uppercase; font-weight:800;
+    visibility:hidden; margin-top:2px;}
+  body.half-top    .team.away .kick{visibility:visible; color:var(--top);}
+  body.half-bottom .team.home .kick{visibility:visible; color:var(--bot);}
+  body.half-top    .team.away .lbl{color:var(--top); border-bottom-color:var(--top);}
+  body.half-bottom .team.home .lbl{color:var(--bot); border-bottom-color:var(--bot);}
+  body.final .inning .num{color:var(--out);}
+  body.final .inning .half, body.final .inning .lbl{color:var(--out);}
+  body.final .inning .clock{color:var(--muted);}
+  body.final .strip{border-color:var(--line); box-shadow:none;}
+  body.final .team .kick{visibility:hidden;}
+
+  /* ---------- line score ---------- */
+  .linescore{margin:0 12px 8px; background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; padding:6px 10px; display:grid;
+    grid-template-columns:minmax(40px,1.4fr) repeat(6,1fr) 1.2fr;
+    font-variant-numeric:tabular-nums; text-align:center; row-gap:2px;}
+  .linescore .h{font-size:9px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); font-weight:700; padding-bottom:2px;}
+  .linescore .c{font-size:14px; font-weight:700; color:var(--chalk); padding:1px 0; border-radius:6px;}
+  .linescore .c.zero{color:var(--muted); font-weight:400;}
+  .linescore .c.future{color:var(--line);}
+  .linescore .tm{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+    font-weight:700; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; align-self:center;}
+  .linescore .r{color:var(--led); font-weight:800;}
+  body.half-top    .linescore .cur{background:rgba(94,200,242,.14);}
+  body.half-bottom .linescore .cur{background:rgba(87,217,138,.14);}
+  body.half-top    .linescore .h.cur{color:var(--top);}
+  body.half-bottom .linescore .h.cur{color:var(--bot);}
+
+  /* ---------- logs ---------- */
+  .logwrap{padding:0 12px 8px;}
+  .logtabs{display:flex; gap:6px;}
+  .logbtn{flex:1; background:transparent; border:1px dashed var(--line); color:var(--muted);
+    border-radius:10px; font-size:11px; font-weight:700; letter-spacing:.12em;
+    text-transform:uppercase; padding:7px;}
+  .logbtn.on{border-style:solid; color:var(--chalk); background:var(--panel);}
+  .log{margin-top:6px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:8px 12px; max-height:170px; overflow-y:auto;}
+  .log .row{display:flex; justify-content:space-between; align-items:baseline; font-size:13px; padding:4px 0;
+    border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums;}
+  .log .row:last-child{border-bottom:0;}
+  .log .row .t{color:var(--led); font-weight:700;}
+  .log .row .htop{color:var(--top); font-weight:700;}
+  .log .row .hbot{color:var(--bot); font-weight:700;}
+  .log .row .time{color:var(--muted); font-size:11px; min-width:52px;}
+  .log .row .msg{flex:1; text-align:left; padding-left:8px;}
+  .log .empty{font-size:12px; color:var(--muted); padding:4px 0;}
+  .log .row.undone .msg{text-decoration:line-through; opacity:.45;}
+  .log .row.undone .htop, .log .row.undone .hbot{opacity:.45;}
+
+  /* ---------- count lamps + tap pads ---------- */
+  main{flex:1; display:flex; flex-direction:column; gap:8px; padding:0 12px;}
+  .pad{flex:1; min-height:84px; display:flex; align-items:stretch;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    transition:transform .06s ease; overflow:hidden;}
+  .pad:active{transform:scale(.985);}
+  .pad-tap{flex:1; display:flex; align-items:center; justify-content:space-between;
+    gap:12px; padding:12px 16px;}
+  .pad-tap:active{background:#222e27;}
+  .pad .name{font-size:15px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;}
+  .pad .rule{font-size:11px; color:var(--muted); margin-top:3px;}
+  .lamps{display:flex; gap:9px;}
+  .lamp{width:22px; height:22px; border-radius:50%; background:var(--led-dim);
+    border:1px solid #000; box-shadow:inset 0 2px 3px rgba(0,0,0,.5);}
+  .lamp.lit{background:var(--led); box-shadow:0 0 12px rgba(255,178,0,.6), inset 0 -2px 3px rgba(0,0,0,.25);}
+  .pad.outs .lamp.lit{background:var(--out); box-shadow:0 0 12px rgba(255,77,61,.6), inset 0 -2px 3px rgba(0,0,0,.25);}
+  .minus{width:56px; flex:none; border:0; border-left:1px solid var(--line);
+    background:rgba(0,0,0,.15); color:var(--muted);
+    font-size:26px; line-height:1; font-weight:700;}
+  .minus:active{background:var(--line); color:var(--chalk);}
+  .pad-left{pointer-events:none;}
+  .pad-right{display:flex; align-items:center; gap:9px; pointer-events:none;}
+
+  /* ---------- action row ---------- */
+  .actions{display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:4px 12px 6px;}
+  .actions button{border:0; border-radius:14px; font-size:15px; font-weight:800;
+    letter-spacing:.08em; text-transform:uppercase; padding:8px; min-height:56px;}
+  .actions button:active{filter:brightness(1.2);}
+  .btn-new{background:var(--go); color:#0b130e;}
+  .btn-undo{background:#2c3a32; color:var(--chalk);}
+
+  /* ---------- toast ---------- */
+  #toast{position:fixed; left:50%; bottom:110px; transform:translateX(-50%) translateY(20px);
+    background:var(--chalk); color:var(--board); font-weight:800; font-size:15px;
+    letter-spacing:.06em; text-transform:uppercase; padding:12px 22px; border-radius:999px;
+    opacity:0; pointer-events:none; transition:all .18s ease; white-space:nowrap;
+    box-shadow:0 6px 24px rgba(0,0,0,.5); z-index:50;}
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  footer{padding:6px 14px 12px; text-align:center; font-size:10px; color:var(--muted);
+    letter-spacing:.06em;}
+  footer b{color:var(--chalk);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hleft">
+    <div class="brand">Head Ref</div>
+    <div class="sub">Kickball</div>
+  </div>
+  <div class="hright">
+    <button class="newgame fsbtn" onclick="toggleFullscreen()" id="fsBtn" title="Fullscreen">⛶</button>
+    <button class="newgame" onclick="resetGame()">⟲ New Game</button>
+  </div>
+</header>
+
+<div class="strip">
+  <div class="team away">
+    <div class="lbl" id="awayName" onclick="rename('away')">Away</div>
+    <div class="runs" id="awayRuns">0</div>
+    <div class="kick">● Kicking</div>
+    <div class="runbtns">
+      <button class="rminus" onclick="removeRun('away')">−</button>
+      <button onclick="addRun('away')">+ Run</button>
+    </div>
+  </div>
+  <div class="inning" id="inningBox">
+    <div class="half" id="halfArrow">▲</div>
+    <div class="num" id="inningNum">1</div>
+    <div class="lbl" id="halfLbl">Top</div>
+    <div class="clock" id="inningClock">0:00</div>
+  </div>
+  <div class="team home">
+    <div class="lbl" id="homeName" onclick="rename('home')">Home</div>
+    <div class="runs" id="homeRuns">0</div>
+    <div class="kick">● Kicking</div>
+    <div class="runbtns">
+      <button class="rminus" onclick="removeRun('home')">−</button>
+      <button onclick="addRun('home')">+ Run</button>
+    </div>
+  </div>
+</div>
+
+<div class="linescore" id="lineScore"></div>
+
+<div class="logwrap">
+  <div class="logtabs">
+    <button class="logbtn on" id="tabInnings" onclick="showLog('innings')">⏱ Innings</button>
+    <button class="logbtn" id="tabAudit" onclick="showLog('audit')">📋 Audit</button>
+  </div>
+  <div class="log" id="logPanel" hidden></div>
+</div>
+
+<main>
+  <div class="pad" id="padBalls">
+    <div class="pad-tap" onclick="bump('balls')">
+      <div class="pad-left">
+        <div class="name">Balls</div>
+        <div class="rule">4 balls = walk</div>
+      </div>
+      <div class="pad-right"><div class="lamps" id="lampsBalls"></div></div>
+    </div>
+    <button class="minus" onclick="drop('balls')">−</button>
+  </div>
+
+  <div class="pad" id="padStrikes">
+    <div class="pad-tap" onclick="bump('strikes')">
+      <div class="pad-left">
+        <div class="name">Strikes</div>
+        <div class="rule">3 strikes = out</div>
+      </div>
+      <div class="pad-right"><div class="lamps" id="lampsStrikes"></div></div>
+    </div>
+    <button class="minus" onclick="drop('strikes')">−</button>
+  </div>
+
+  <div class="pad" id="padFouls">
+    <div class="pad-tap" onclick="bump('fouls')">
+      <div class="pad-left">
+        <div class="name">Fouls</div>
+        <div class="rule">3 fouls = out</div>
+      </div>
+      <div class="pad-right"><div class="lamps" id="lampsFouls"></div></div>
+    </div>
+    <button class="minus" onclick="drop('fouls')">−</button>
+  </div>
+
+  <div class="pad outs" id="padOuts">
+    <div class="pad-tap" onclick="bump('outs')">
+      <div class="pad-left">
+        <div class="name">Outs</div>
+        <div class="rule">3 outs retires the side</div>
+      </div>
+      <div class="pad-right"><div class="lamps" id="lampsOuts"></div></div>
+    </div>
+    <button class="minus" onclick="drop('outs')">−</button>
+  </div>
+</main>
+
+<div class="actions">
+  <button class="btn-undo" onclick="undo()">↩ Undo</button>
+  <button class="btn-new" onclick="newBatter(true)" id="newBtn">New Kicker</button>
+</div>
+
+<footer>Tap a panel to add · <b>−</b> to subtract · tap a team name to rename · game auto-saves on this device</footer>
+
+<div id="toast"></div>
+
+<script>
+/* ---------------- kickball rules ---------------- */
+const RULES = { balls:4, strikes:3, fouls:3, maxInnings:6 };
+
+function freshState(){
+  return { balls:0, strikes:0, fouls:0, outs:0,
+           away:0, home:0, inning:1, half:'top',
+           awayName:'Away', homeName:'Home',
+           halfStart:Date.now(), log:[], final:false,
+           line:{away:[0,0,0,0,0,0], home:[0,0,0,0,0,0]} };
+}
+let S = freshState();
+let history = [];
+let AUDIT = []; // append-only; never rolled back by undo
+
+function snap(){
+  // remember the action's label and where its audit entries start
+  history.push({ state:JSON.stringify(S), label:null, alen:AUDIT.length });
+  if(history.length>60) history.shift();
+}
+
+function halfTag(){ return (S.half==='top'?'▲':'▼')+S.inning; }
+function audit(msg){
+  AUDIT.push({ ts:Date.now(), tag:halfTag(), msg:msg });
+  // first audit entry after a snapshot names the action for undo
+  const h = history[history.length-1];
+  if(h && h.label===null) h.label = msg;
+}
+
+function undo(){
+  if(!history.length){ toast("Nothing to undo"); return; }
+  const h = history.pop();
+  S = JSON.parse(h.state);
+  if(h.auditBackup){
+    // undoing a full game reset: bring the old audit trail back too
+    AUDIT = JSON.parse(h.auditBackup);
+    AUDIT.push({ ts:Date.now(), tag:halfTag(), msg:"↩ Undid: Game reset" });
+    toast("Game restored");
+    render();
+    return;
+  }
+  // strike through the entries this action produced (but never undo rows)
+  for(let i=h.alen; i<AUDIT.length; i++){
+    if(!AUDIT[i].msg.startsWith('↩')) AUDIT[i].undone = true;
+  }
+  const label = h.label || "last action";
+  AUDIT.push({ ts:Date.now(), tag:halfTag(), msg:"↩ Undid: "+label });
+  toast("Undid: "+label);
+  render();
+}
+
+/* ---------------- local persistence ---------------- */
+const SAVE_KEY = 'headref-kickball-v1';
+function save(){
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify({S:S, AUDIT:AUDIT, history:history}));
+  }catch(e){ /* storage unavailable (e.g. embedded preview) — run in-memory */ }
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if(d && d.S && d.S.line){
+      S = d.S;
+      AUDIT = d.AUDIT || [];
+      history = d.history || [];
+    }
+  }catch(e){ /* corrupt or unavailable — start fresh */ }
+}
+
+/* ---------------- core actions ---------------- */
+function bump(k){
+  if(S.final){ toast("Game is final"); return; }
+  snap();
+  buzz(12);
+  if(k==='balls'){
+    S.balls++;
+    if(S.balls>=RULES.balls){ audit("Ball 4 — walk"); toast("Ball 4 — Walk"); resetCount(); }
+    else audit("Ball "+S.balls);
+  }
+  else if(k==='strikes'){
+    S.strikes++;
+    if(S.strikes>=RULES.strikes){ audit("Strike 3 — out"); toast("Strike 3 — Out!"); registerOut(); }
+    else audit("Strike "+S.strikes);
+  }
+  else if(k==='fouls'){
+    S.fouls++;
+    if(S.fouls>=RULES.fouls){ audit("Foul "+RULES.fouls+" — out"); toast("Foul "+RULES.fouls+" — Out!"); registerOut(); }
+    else { audit("Foul "+S.fouls); toast("Foul "+S.fouls); }
+  }
+  else if(k==='outs'){
+    audit("Out (ref call)");
+    registerOut(true);
+  }
+  render();
+}
+
+function drop(k){
+  if(S[k]<=0) return;
+  snap();
+  S[k]--;
+  audit("Removed 1 "+k.replace(/s$/,'')+" ("+k+" now "+S[k]+")");
+  render();
+}
+
+function registerOut(manual){
+  S.outs++;
+  resetCount();
+  buzz(45);
+  if(S.outs>=3){
+    buzz([45,60,45]);
+    // close out this half-inning and record its duration
+    const secs = Math.round((Date.now()-S.halfStart)/1000);
+    S.log.push({inning:S.inning, half:S.half, secs:secs});
+    audit("Side retired ("+fmt(secs)+")");
+    S.outs=0;
+    if(S.half==='top'){
+      S.half='bottom';
+      S.halfStart=Date.now();
+      toast("Side retired — Bottom "+S.inning);
+    } else if(S.inning>=RULES.maxInnings){
+      S.final=true;
+      const w = S.away>S.home ? S.awayName : S.home>S.away ? S.homeName : null;
+      audit("Final: "+S.awayName+" "+S.away+" — "+S.homeName+" "+S.home);
+      toast(w ? "Final — "+w+" wins!" : "Final — Tie game");
+    } else {
+      S.half='top'; S.inning++;
+      S.halfStart=Date.now();
+      toast("Side retired — Top "+S.inning);
+    }
+  } else if(manual){
+    toast("Out "+S.outs);
+  }
+}
+
+function resetCount(){ S.balls=0; S.strikes=0; S.fouls=0; }
+
+function newBatter(withSnap){
+  if(withSnap) snap();
+  resetCount();
+  audit("New kicker");
+  toast("New kicker up");
+  render();
+}
+
+function addRun(t){
+  if(S.final){ toast("Game is final"); return; }
+  snap();
+  S[t]++;
+  S.line[t][S.inning-1]++;
+  audit("Run: "+(t==='away'?S.awayName:S.homeName)+" ("+S.away+"–"+S.home+")");
+  render();
+}
+
+function removeRun(t){
+  if(S[t]<=0) return;
+  snap();
+  S[t]--;
+  // take the run back from the current inning if it has one, else the latest inning that does
+  const arr=S.line[t];
+  let i = arr[S.inning-1]>0 ? S.inning-1 : -1;
+  if(i<0){ for(let j=arr.length-1;j>=0;j--){ if(arr[j]>0){ i=j; break; } } }
+  if(i>=0) arr[i]--;
+  audit("Run removed: "+(t==='away'?S.awayName:S.homeName)+" ("+S.away+"–"+S.home+")");
+  toast("Run removed");
+  render();
+}
+
+/* ---------------- team names ---------------- */
+function rename(t){
+  const cur = t==='away' ? S.awayName : S.homeName;
+  const n = prompt("Team name:", cur);
+  if(n && n.trim()){
+    snap();
+    const old = t==='away' ? S.awayName : S.homeName;
+    if(t==='away') S.awayName=n.trim(); else S.homeName=n.trim();
+    audit("Renamed "+old+" → "+n.trim());
+    render();
+  }
+}
+
+/* ---------------- logs ---------------- */
+function fmt(secs){
+  const m=Math.floor(secs/60), s=secs%60;
+  return m+":"+String(s).padStart(2,'0');
+}
+function clock12(ts){
+  const d=new Date(ts);
+  let h=d.getHours(); const m=String(d.getMinutes()).padStart(2,'0');
+  const ap=h>=12?'p':'a'; h=h%12||12;
+  return h+":"+m+ap;
+}
+
+let logTab = null; // null = closed, 'innings' | 'audit'
+function showLog(tab){
+  logTab = (logTab===tab) ? null : tab; // tap the open tab again to close
+  document.getElementById('tabInnings').classList.toggle('on', logTab==='innings');
+  document.getElementById('tabAudit').classList.toggle('on', logTab==='audit');
+  document.getElementById('logPanel').hidden = (logTab===null);
+  renderLog();
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderLog(){
+  const p=document.getElementById('logPanel');
+  if(p.hidden || !logTab) return;
+  if(logTab==='innings'){
+    if(!S.log.length){ p.innerHTML='<div class="empty">No completed half-innings yet.</div>'; return; }
+    p.innerHTML = S.log.map(e=>{
+      const cls = e.half==='top' ? 'htop' : 'hbot';
+      const side = e.half==='top' ? '▲ Top' : '▼ Bot';
+      return '<div class="row"><span class="'+cls+'">'+side+' '+e.inning+'</span><span class="t">'+fmt(e.secs)+'</span></div>';
+    }).join('');
+  } else {
+    if(!AUDIT.length){ p.innerHTML='<div class="empty">Nothing recorded yet.</div>'; return; }
+    // newest first
+    p.innerHTML = AUDIT.slice().reverse().map(e=>{
+      const cls = e.tag.startsWith('▲') ? 'htop' : 'hbot';
+      return '<div class="row'+(e.undone?' undone':'')+'"><span class="time">'+clock12(e.ts)+'</span>'+
+      '<span class="msg">'+esc(e.msg)+'</span>'+
+      '<span class="'+cls+'">'+esc(e.tag)+'</span></div>';
+    }).join('');
+  }
+}
+
+/* ---------------- reset game (long-press the inning box) ---------------- */
+let pressTimer;
+const inningBox = document.getElementById('inningBox');
+['touchstart','mousedown'].forEach(ev=>inningBox.addEventListener(ev, ()=>{ pressTimer=setTimeout(resetGame, 900); }));
+['touchend','touchcancel','mouseup','mouseleave'].forEach(ev=>inningBox.addEventListener(ev, ()=>clearTimeout(pressTimer)));
+function resetGame(){
+  if(confirm("Start a new game? (Undo can restore it)")){
+    history.push({ state:JSON.stringify(S), label:"Game reset",
+                   alen:AUDIT.length, auditBackup:JSON.stringify(AUDIT) });
+    if(history.length>60) history.shift();
+    S=freshState();
+    AUDIT=[];
+    audit("New game started");
+    render();
+    toast("New game — Undo restores the old one");
+  }
+}
+
+/* ---------------- render ---------------- */
+function lampRow(el, count, slots){
+  el.innerHTML='';
+  const n = Math.max(slots, count); // never hide a lit lamp
+  for(let i=0;i<n;i++){
+    const d=document.createElement('div');
+    d.className='lamp'+(i<count?' lit':'');
+    el.appendChild(d);
+  }
+}
+
+function render(){
+  // classic scoreboard convention: show one fewer slot than the limit
+  lampRow(document.getElementById('lampsBalls'),   S.balls,   RULES.balls-1);   // 3 slots
+  lampRow(document.getElementById('lampsStrikes'), S.strikes, RULES.strikes-1); // 2 slots
+  lampRow(document.getElementById('lampsFouls'),   S.fouls,   RULES.fouls-1);   // 3 slots
+  lampRow(document.getElementById('lampsOuts'),    S.outs,    2);               // 2 slots
+
+  document.getElementById('awayName').textContent = S.awayName;
+  document.getElementById('homeName').textContent = S.homeName;
+  document.getElementById('awayRuns').textContent = S.away;
+  document.getElementById('homeRuns').textContent = S.home;
+  renderLine();
+
+  document.body.classList.toggle('final', S.final);
+  document.body.classList.toggle('half-top',    !S.final && S.half==='top');
+  document.body.classList.toggle('half-bottom', !S.final && S.half==='bottom');
+  if(S.final){
+    document.getElementById('halfArrow').textContent = '■';
+    document.getElementById('inningNum').textContent = 'F';
+    document.getElementById('halfLbl').textContent   = 'Final';
+  } else {
+    document.getElementById('inningNum').textContent = S.inning;
+    document.getElementById('halfArrow').textContent = S.half==='top' ? '▲' : '▼';
+    document.getElementById('halfLbl').textContent   = S.half==='top' ? 'Top' : 'Bottom';
+  }
+  tick();
+  renderLog();
+  save();
+}
+
+/* line score: runs per inning */
+function renderLine(){
+  const el=document.getElementById('lineScore');
+  const cur=S.inning-1;
+  // an inning column is "future" if that team hasn't kicked in it yet
+  const started=(t,i)=>{
+    if(S.final) return true;
+    if(i<cur) return true;
+    if(i>cur) return false;
+    return t==='away' ? true : S.half==='bottom'; // home's half starts in the bottom
+  };
+  let h='<div class="tm"></div>';
+  for(let i=1;i<=6;i++) h+='<div class="h'+(!S.final&&i-1===cur?' cur':'')+'">'+i+'</div>';
+  h+='<div class="h">R</div>';
+  for(const t of ['away','home']){
+    h+='<div class="tm">'+esc(t==='away'?S.awayName:S.homeName)+'</div>';
+    for(let i=0;i<6;i++){
+      const isCur=!S.final && i===cur && (t==='away' ? S.half==='top' : S.half==='bottom');
+      const v=S.line[t][i];
+      let cls='c'+(isCur?' cur':'');
+      let txt;
+      if(!started(t,i)){ cls+=' future'; txt='–'; }
+      else { if(v===0) cls+=' zero'; txt=v; }
+      h+='<div class="'+cls+'">'+txt+'</div>';
+    }
+    h+='<div class="c r">'+S[t]+'</div>';
+  }
+  el.innerHTML=h;
+}
+
+/* live half-inning clock */
+function tick(){
+  const el=document.getElementById('inningClock');
+  if(S.final){
+    const total=S.log.reduce((a,e)=>a+e.secs,0);
+    el.textContent="⏱ "+fmt(total);
+  } else {
+    el.textContent=fmt(Math.round((Date.now()-S.halfStart)/1000));
+  }
+}
+setInterval(tick, 1000);
+
+/* ---------------- app-like behavior ---------------- */
+// haptic feedback
+function buzz(pattern){ try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){} }
+
+// keep the screen awake during the game (re-acquired when returning to the app)
+let wakeLock=null, wakeToastShown=false;
+async function keepAwake(){
+  try{
+    if(!('wakeLock' in navigator) || wakeLock) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
+    if(!wakeToastShown){ toast("Screen will stay awake"); wakeToastShown=true; }
+  }catch(e){ /* not available in this context — Android's display timeout applies */ }
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') keepAwake(); });
+document.addEventListener('pointerdown', keepAwake, {once:true});
+
+// fullscreen toggle
+function toggleFullscreen(){
+  const el=document.documentElement;
+  if(!document.fullscreenElement){
+    (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el);
+  } else {
+    (document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document);
+  }
+}
+document.addEventListener('fullscreenchange', ()=>{
+  document.getElementById('fsBtn').textContent = document.fullscreenElement ? '✕' : '⛶';
+});
+
+// no long-press context menu (long-press is a gesture here)
+document.addEventListener('contextmenu', e=>e.preventDefault());
+
+/* ---------------- toast ---------------- */
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), 1600);
+}
+
+// offline install (only when hosted; harmless when opened as a plain file)
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+
+load();
+render();
+</script>
+</body>
+</html>
