@@ -281,7 +281,7 @@ function freshState(){
   return { balls:0, strikes:0, fouls:0, outs:0,
            away:0, home:0, inning:1, half:'top',
            awayName:'Away', homeName:'Home',
-           halfStart:Date.now(), log:[], final:false,
+           halfStart:null, log:[], final:false,
            line:{away:[0,0,0,0,0,0], home:[0,0,0,0,0,0]} };
 }
 let S = freshState();
@@ -348,6 +348,7 @@ function load(){
 function bump(k){
   if(S.final){ toast("Game is final"); return; }
   snap();
+  startClock();
   buzz(12);
   if(k==='balls'){
     S.balls++;
@@ -386,7 +387,7 @@ function registerOut(manual){
   if(S.outs>=3){
     buzz([45,60,45]);
     // close out this half-inning and record its duration
-    const secs = Math.round((Date.now()-S.halfStart)/1000);
+    const secs = S.halfStart ? Math.round((Date.now()-S.halfStart)/1000) : 0;
     S.log.push({inning:S.inning, half:S.half, secs:secs});
     audit("Side retired ("+fmt(secs)+")");
     S.outs=0;
@@ -411,8 +412,12 @@ function registerOut(manual){
 
 function resetCount(){ S.balls=0; S.strikes=0; S.fouls=0; }
 
+// the game clock starts with the first action after a reset
+function startClock(){ if(!S.halfStart) S.halfStart=Date.now(); }
+
 function newBatter(withSnap){
   if(withSnap) snap();
+  startClock();
   resetCount();
   audit("New kicker");
   toast("New kicker up");
@@ -422,6 +427,7 @@ function newBatter(withSnap){
 function addRun(t){
   if(S.final){ toast("Game is final"); return; }
   snap();
+  startClock();
   S[t]++;
   S.line[t][S.inning-1]++;
   audit("Run: "+(t==='away'?S.awayName:S.homeName)+" ("+S.away+"–"+S.home+")");
@@ -596,7 +602,7 @@ function tick(){
     const total=S.log.reduce((a,e)=>a+e.secs,0);
     el.textContent="⏱ "+fmt(total);
   } else {
-    el.textContent=fmt(Math.round((Date.now()-S.halfStart)/1000));
+    el.textContent = S.halfStart ? fmt(Math.round((Date.now()-S.halfStart)/1000)) : "0:00";
   }
 }
 setInterval(tick, 1000);
@@ -643,7 +649,6 @@ function toast(msg){
   toastTimer=setTimeout(()=>t.classList.remove('show'), 1600);
 }
 
-// offline install (only when hosted; harmless when opened as a plain file)
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
